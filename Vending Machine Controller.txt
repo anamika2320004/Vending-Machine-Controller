@@ -1,0 +1,101 @@
+//Vending Machine Controller
+//code 
+module vending_machine (
+    input clk,
+    input reset,
+    input coin5,   // ₹5 coin inserted
+    input coin10,  // ₹10 coin inserted
+    output reg dispense
+);
+
+    // State encoding
+    typedef enum reg [1:0] {
+        S0  = 2'b00,
+        S5  = 2'b01,
+        S10 = 2'b10,
+        S15 = 2'b11
+    } state_t;
+
+    state_t state, next_state;
+
+    // State transition
+    always @(posedge clk or posedge reset) begin
+        if (reset)
+            state <= S0;
+        else
+            state <= next_state;
+    end
+
+    // Next state logic
+    always @(*) begin
+        next_state = state;
+        dispense = 0;
+        case (state)
+            S0: begin
+                if (coin5) next_state = S5;
+                else if (coin10) next_state = S10;
+            end
+            S5: begin
+                if (coin5) next_state = S10;
+                else if (coin10) next_state = S15;
+            end
+            S10: begin
+                if (coin5) next_state = S15;
+                else if (coin10) next_state = S15; // ₹20 inserted, still dispense
+            end
+            S15: begin
+                dispense = 1;     // product dispensed
+                next_state = S0;  // reset to idle
+            end
+        endcase
+    end
+endmodule
+
+
+
+//testbench
+`timescale 1ns/1ps
+module tb_vending_machine;
+    reg clk, reset, coin5, coin10;
+    wire dispense;
+
+    vending_machine uut (
+        .clk(clk),
+        .reset(reset),
+        .coin5(coin5),
+        .coin10(coin10),
+        .dispense(dispense)
+    );
+
+    // Clock generation
+    always #5 clk = ~clk;
+
+    initial begin
+        $dumpfile("dump.vcd"); 
+        $dumpvars(0, tb_vending_machine);
+
+        clk = 0; reset = 1; coin5 = 0; coin10 = 0;
+        #10 reset = 0;
+
+        // Insert ₹5, then ₹10 → should dispense
+        #10 coin5 = 1; #10 coin5 = 0;
+        #10 coin10 = 1; #10 coin10 = 0;
+
+        // Insert ₹10, then ₹10 → should dispense
+        #20 coin10 = 1; #10 coin10 = 0;
+        #20 coin10 = 1; #10 coin10 = 0;
+
+        // Insert ₹5, then ₹5, then ₹5 → should dispense
+        #20 coin5 = 1; #10 coin5 = 0;
+        #20 coin5 = 1; #10 coin5 = 0;
+        #20 coin5 = 1; #10 coin5 = 0;
+
+        #50 $finish;
+    end
+
+    // Console monitor
+    initial begin
+        $monitor("Time=%0t | reset=%b | coin5=%b | coin10=%b | dispense=%b",
+                  $time, reset, coin5, coin10, dispense);
+    end
+endmodule
